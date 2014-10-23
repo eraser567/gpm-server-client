@@ -53,7 +53,7 @@ struct MyCallback {
 		printf("%d answers are found, with %d distinct matchings for query node %d...\n", g_answer_count, outputnodes.size(), id_outputnode);
 	}
 
-	if (g_mode == 0) return false;
+	if (g_mode == 0 || g_answer_count > 20000) return false;
 	else return true;
     }
     
