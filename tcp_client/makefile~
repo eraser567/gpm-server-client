@@ -1,0 +1,13 @@
+gpm_client: main.o tcp_server.o
+	c++ -o gpm_server main.o tcp_server.o -O2
+
+main.o: main.cpp tcp_server.h
+	c++ -o main.o -c main.cpp -O2
+
+tcp_server.o: tcp_server.cpp tcp_server.h
+	c++ -o tcp_server.o -c tcp_server.cpp -O2
+
+clean:
+	rm -f main.o tcp_server.o \
+	gpm_server
+
