@@ -98,32 +98,30 @@ int main_testbitmap() {
 }
 
 void setsig (int from, int from_l, int to, int to_l, int base, int lnum, map< int, char* > &sigs) {
-	map< int, char* >::iterator it_from = sigs.find(from);
-	map< int, char* >::iterator it_to = sigs.find(to);
-	char *from_b, *to_b;
-	if (it_from == sigs.end()) {
-		from_b = new char[BITMAPSIZE];
-		memset(from_b, 0, BITMAPSIZE*sizeof(char));
-		sigs.insert(pair<int, char *>(from, from_b));
-	}
-	else {
-		from_b = it_from->second;
-	}
-	if (it_to == sigs.end()) {
-		to_b = new char[BITMAPSIZE];
-		memset(to_b, 0, BITMAPSIZE*sizeof(char));
-		sigs.insert(pair<int, char *>(to, to_b));
-	}
-	else {
-		to_b = it_to->second;
-	}
-	
-	//int hash1 = myhash(to_l, base);
-	//int hash2 = myhash(base-from_l, base);
-	//printf("from=%d(%d), to=%d(%d), base=%d, lnum=%d, ", from, from_l, to, to_l, base, lnum);
-	//printf("hash1=%d, hash2=%d\n", hash1, hash2);
-	setbitmap(myhash(lnum+to_l, base), from_b);
-	setbitmap(myhash(lnum-from_l, base), to_b);
+        map< int, char* >::iterator it_from = sigs.find(from);
+        map< int, char* >::iterator it_to = sigs.find(to);
+        char *from_b, *to_b;
+        if (it_from == sigs.end()) {
+                from_b = new char[BITMAPSIZE];
+                memset(from_b, 0, BITMAPSIZE*sizeof(char));
+                sigs.insert(pair<int, char *>(from, from_b));
+        }
+        else {
+                sigs[from] = (char *) ((uintptr_t) sigs[from] & (uintptr_t) 0x00000000ffffffff);
+                from_b = sigs[from];
+        }
+        if (it_to == sigs.end()) {
+                to_b = new char[BITMAPSIZE];
+                memset(to_b, 0, BITMAPSIZE*sizeof(char));
+                sigs.insert(pair<int, char *>(to, to_b));
+        }
+        else {
+                sigs[to] = (char *) ((uintptr_t) sigs[to] & (uintptr_t) 0x00000000ffffffff);
+                to_b = sigs[to];
+        }
+        
+        setbitmap(myhash(lnum+to_l, base), from_b);
+        setbitmap(myhash(lnum-from_l, base), to_b);
 }
 
 void add_to_graph (int &id, int &l, char *p, map<int, vector<int> > &g, map<int, int> &label, set<int> &labelset) {
@@ -166,19 +164,20 @@ char *trimwhitespace(char *str) {
 }
 
 void parse_line (char *buffer, map<int, vector<int> > &g, map<int, int> &label, set<int> &labelset) {
-	int size = strlen(buffer);
-	char *p = buffer;
-	int id = -1;
-	int l = -1;
-	for (int i = 0; i < size; i ++) {
-		if (buffer[i] == '\t') {
-			add_to_graph(id, l, p, g, label, labelset);
-			buffer[i] = 0;
-			p = buffer + 1 + i;
-		}
-	}
-	add_to_graph(id, l, p, g, label, labelset);
-	//printf("\n");
+        int size = strlen(buffer);
+        char *p = buffer;
+        int id = -1;
+        int l = -1;
+        //printf("[LINE]%s\n", buffer);
+        for (int i = 0; i < size; i ++) {
+                if (buffer[i] == '\t') {
+                        buffer[i] = 0; //// (1)
+                        add_to_graph(id, l, p, g, label, labelset);
+                        p = buffer + 1 + i;
+                }
+        }
+        if(strlen(p) > 0) add_to_graph(id, l, p, g, label, labelset); //// (2)
+        //printf("\n");
 }
 
 // return: 0 for cycle, 1 for DAG
@@ -366,134 +365,139 @@ bool sigmatch (int *qs, int *gs) {
 }
 
 int find_cand_in_g (int ql, char *qs, set<int> &cand, map<int, vector<int> > &g, map<int, int > &glabel, map< int, char* > &gsigs, map<int, vector<int> > &ivi, map<int, vector<int> > &gsmall) {
-	//map<int, vector<int> >::iterator itg = g.begin();
-	//map<int, vector<int> >::iterator itg_end = g.end();
+        //map<int, vector<int> >::iterator itg = g.begin();
+        //map<int, vector<int> >::iterator itg_end = g.end();
 
-	// print inverted index
-	/*map<int, vector<int> >::iterator itiviprint = ivi.begin();
-	map<int, vector<int> >::iterator itiviprint_end = ivi.end();
-	for (; itiviprint != itiviprint_end; itiviprint ++) {
-		printf("label=%d : %d\n", itiviprint->first, itiviprint->second.size());
-	}
-	printf("search label=%d\n", ql);*/
+        // print inverted index
+        /*map<int, vector<int> >::iterator itiviprint = ivi.begin();
+        map<int, vector<int> >::iterator itiviprint_end = ivi.end();
+        for (; itiviprint != itiviprint_end; itiviprint ++) {
+                printf("label=%d : %d\n", itiviprint->first, itiviprint->second.size());
+        }
+        printf("search label=%d\n", ql);*/
 
+        map<int, vector<int> >::iterator itivimap = ivi.find(ql);
+        if (itivimap == ivi.end()) {
+                return 0;
+        }
 
-	map<int, vector<int> >::iterator itivimap = ivi.find(ql);
-	if (itivimap == ivi.end()) return 0;
+        vector<int>::iterator itivi = itivimap->second.begin();
+        vector<int>::iterator itivi_end = itivimap->second.end();
+        map< int, char* >::iterator itsig_end = gsigs.end();
+        int count = 0;
+        //int no1 = 0, no2 = 0;
+        //for (; itg != itg_end; itg ++) {
+        for (; itivi != itivi_end; itivi ++) {
+                //int gid = itg->first;
+                //int gl = glabel[gid];
+                int gid = *itivi;
+                bool iscand = false;
+                //if (ql == gl) {
+                        count ++;
+                        map< int, char* >::iterator itsig = gsigs.find(gid);
+                        if (itsig == itsig_end) {
+                                if (qs == NULL) {
+                                        iscand = true;
+                                }
+                                //else no1 ++;
+                        }
+                        else {
+                                if (qs == NULL) {
+                                        iscand = true;
+                                }
+                                else {
+                                        char *gs = itsig->second;
+                                        qs = (char *) ((uintptr_t) qs & (uintptr_t) 0x00000000ffffffff);
+                                        gs = (char *) ((uintptr_t) gs & (uintptr_t) 0x00000000ffffffff);
+                                        if (sigmatch((int *)qs, (int *)gs)) {
+                                                iscand = true;
+                                        }
+                                        //else no2 ++;
+                                        
+                                        /*printf("signature:\n");       
+                                        for (int i=0; i < BITMAPSIZE; i ++) {
+                                                printf("%2d. ", i);
+                                                printbyte(qs+i);
+                                                printf("\t");
+                                                printbyte(gs+i);
+                                                printf("\n");
+                                        }
+                                        char fse;
+                                        scanf("%c", &fse);*/
+                                }
+                        }
+                        if (iscand) {
+                                cand.insert(gid);
+                                if (gsmall.count(gid) == 0) gsmall.insert(pair<int, vector<int> >(gid, vector<int>())); 
 
-	vector<int>::iterator itivi = itivimap->second.begin();
-	vector<int>::iterator itivi_end = itivimap->second.end();
-	map< int, char* >::iterator itsig_end = gsigs.end();
-	int count = 0;
-	//int no1 = 0, no2 = 0;
-	//for (; itg != itg_end; itg ++) {
-	for (; itivi != itivi_end; itivi ++) {
-		//int gid = itg->first;
-		//int gl = glabel[gid];
-		int gid = *itivi;
-		bool iscand = false;
-		//if (ql == gl) {
-			count ++;
-			map< int, char* >::iterator itsig = gsigs.find(gid);
-			if (itsig == itsig_end) {
-				if (qs == NULL) {
-					iscand = true;
-				}
-				//else no1 ++;
-			}
-			else {
-				if (qs == NULL) {
-					iscand = true;
-				}
-				else {
-					char *gs = itsig->second;
-					if (sigmatch((int *)qs, (int *)gs)) {
-						iscand = true;
-					}
-					//else no2 ++;
-					
-					/*printf("signature:\n");	
-					for (int i=0; i < BITMAPSIZE; i ++) {
-						printf("%2d. ", i);
-						printbyte(qs+i);
-						printf("\t");
-						printbyte(gs+i);
-						printf("\n");
-					}
-					char fse;
-					scanf("%c", &fse);*/
-				}
-			}
-			if (iscand) {
-				cand.insert(gid);
-				if (gsmall.count(gid) == 0) gsmall.insert(pair<int, vector<int> >(gid, vector<int>())); 
+                        }
+                //}
+        }
 
-			}
-		//}
-	}
-
-	/*printf("signature:\n");	
-	for (int i=0; i < BITMAPSIZE; i ++) {
-		printf("%2d. ", i);
-		printbyte(qs+i);
-		printf("\n");
-	}
-	printf("same label(%d) count=%d, no1=%d, no2=%d\n", ql, count, no1, no2);*/
-	//printf("%d out of %d", cand.size(), count);
-	return cand.size();
+        /*printf("signature:\n");       
+        for (int i=0; i < BITMAPSIZE; i ++) {
+                printf("%2d. ", i);
+                printbyte(qs+i);
+                printf("\n");
+        }
+        printf("same label(%d) count=%d, no1=%d, no2=%d\n", ql, count, no1, no2);*/
+        printf("%d out of %d", cand.size(), count);
+        return cand.size();
 }
 
 int find_cand_in_neighors (set<int> &fromcand, int ql, char *qs, set<int> &cand, map<int, vector<int> > &g, map<int, int > &glabel, map< int, char* > &gsigs, map<int, vector<int> > &gsmall) {
-	set<int>::iterator its = fromcand.begin();
-	set<int>::iterator its_end = fromcand.end();
-	map< int, char* >::iterator itsig_end = gsigs.end();
-	int count = 0;
-	//int no1=0, no2=0, no3=0;
+        set<int>::iterator its = fromcand.begin();
+        set<int>::iterator its_end = fromcand.end();
+        map< int, char* >::iterator itsig_end = gsigs.end();
+        int count = 0;
+        //int no1=0, no2=0, no3=0;
 
-	// for each candidate u of the "from node"	
-	for (; its != its_end; its ++) {
-		// find u's children, which satisfy ql and qs
-		int uid = *its;
-		vector<int>::iterator itv = g[uid].begin();
-		vector<int>::iterator itv_end = g[uid].end();
-		// for each child v
-		for (; itv != itv_end; itv ++) {
-			int gid = *itv;
-			int gl = glabel[gid];
-			bool iscand = false;
-			if (ql == gl) {
-				count ++;
-				map< int, char* >::iterator itsig = gsigs.find(gid);
-				if (itsig == itsig_end) {
-					if (qs == NULL) {
-						iscand = true;
-					}
-					//else no1 ++;
-				}
-				else {
-					if (qs == NULL) {
-						iscand = true;
-					}
-					else {
-						char *gs = itsig->second;
-						if (sigmatch((int *)qs, (int *)gs)) {
-							iscand = true;
-						}
-						//else no2 ++;
-					}
-				}
-				if (iscand) {
-					cand.insert(gid);
-					gsmall[uid].push_back(gid);
-					if (gsmall.count(gid) == 0) gsmall.insert(pair<int, vector<int> >(gid, vector<int>())); 
-				}
-			}
-		}
-	}
+        // for each candidate u of the "from node"      
+        for (; its != its_end; its ++) {
+                // find u's children, which satisfy ql and qs
+                int uid = *its;
+                vector<int>::iterator itv = g[uid].begin();
+                vector<int>::iterator itv_end = g[uid].end();
+                // for each child v
+                for (; itv != itv_end; itv ++) {
+                        int gid = *itv;
+                        int gl = glabel[gid];
+                        bool iscand = false;
+                        if (ql == gl) {
+                                count ++;
+                                map< int, char* >::iterator itsig = gsigs.find(gid);
+                                if (itsig == itsig_end) {
+                                        if (qs == NULL) {
+                                                iscand = true;
+                                        }
+                                        //else no1 ++;
+                                }
+                                else {
+                                        if (qs == NULL) {
+                                                iscand = true;
+                                        }
+                                        else {
+                                                char *gs = itsig->second;
+                                                qs = (char *) ((uintptr_t) qs & (uintptr_t) 0x00000000ffffffff);
+                                                gs = (char *) ((uintptr_t) gs & (uintptr_t) 0x00000000ffffffff);
+                                                if (sigmatch((int *)qs, (int *)gs)) {
+                                                        iscand = true;
+                                                }
+                                                //else no2 ++;
+                                        }
+                                }
+                                if (iscand) {
+                                        cand.insert(gid);
+                                        gsmall[uid].push_back(gid);
+                                        if (gsmall.count(gid) == 0) gsmall.insert(pair<int, vector<int> >(gid, vector<int>())); 
+                                }
+                        }
+                }
+        }
 
-	//printf("%d out of %d", cand.size(), count);
-	//printf(", no1=%d, no2=%d", no1, no2);
-	return cand.size();
+        printf("%d out of %d", cand.size(), count);
+        //printf(", no1=%d, no2=%d", no1, no2);
+        return cand.size();
 }
 
 int intersection (set<int> &small, set<int> &large, set<int> &result) {
@@ -744,7 +748,9 @@ void tcp_server::clean_up() {
 	map< int, char* >::iterator itsig = sigs.begin();
 	map< int, char* >::iterator itsig_end = sigs.end();
 	for (; itsig != itsig_end; itsig ++) {
-		delete[] itsig->second;
+		char *p = itsig->second;
+		p = (char *) ((uintptr_t) p & (uintptr_t) 0x00000000ffffffff);
+		delete[] p;
 	}	
 }
 
@@ -972,7 +978,7 @@ int tcp_server::check(char *query_fn, int mode) {
 		}*/
 
 		// ******** vf2 ******** 
-		vf2_subgraph_iso(qgraph, 
+		vf2_subgraph_mono(qgraph, 
 			dgraph, 
 			callback, 
 			get(vertex_index, qgraph),
