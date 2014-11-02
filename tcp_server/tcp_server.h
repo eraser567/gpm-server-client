@@ -13,6 +13,8 @@
 #include <queue>
 #include <map>
 #include <set>
+#include <stdint.h>
+#include <inttypes.h>
 
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/vf2_sub_graph_iso.hpp>
@@ -28,6 +30,7 @@ typedef adjacency_list<vecS, vecS, bidirectionalS> Graph;
 typedef graph_traits<Graph>::vertex_descriptor Vertex;
 typedef graph_traits<Graph>::vertex_iterator vertex_iter;
 typedef graph_traits<Graph> GraphTraits;
+typedef unsigned long SigType;
 
 #define MAXSIZE 32768
 
@@ -42,7 +45,7 @@ private:
 	map<int, int > label;
 	set<int> labelset;
 	map<int, vector<int> > inverted_index;
-	map< int, char* > sigs;
+	map< int, SigType > sigs;
 
 	int base;
 	int lnum;
